@@ -3,3 +3,4 @@
 2. join()
 3. yield()
 
+### Thread priorities
