@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>scheduleAtFixedRate</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #00e5ff;
+    --accent2: #ff6b6b;
+    --accent3: #a8ff78;
+    --text: #e2e2f0;
+    --muted: #555570;
+    --task-color: #00e5ff;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,229,255,0.07), transparent);
+    pointer-events: none;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 900px;
+  }
+
+  header {
+    margin-bottom: 48px;
+    text-align: center;
+  }
+
+  .method-name {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+  }
+
+  .method-name span { color: var(--muted); }
+
+  .subtitle {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Timeline card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px 32px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .card-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 28px;
+  }
+
+  /* ── Timeline ── */
+  .timeline-wrap {
+    position: relative;
+    padding-bottom: 8px;
+  }
+
+  /* Axis */
+  .axis {
+    position: relative;
+    height: 2px;
+    background: var(--border);
+    margin: 60px 0 80px;
+    border-radius: 2px;
+  }
+
+  .axis-arrow {
+    position: absolute;
+    right: -10px;
+    top: -5px;
+    width: 0; height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 10px solid var(--border);
+  }
+
+  .axis-label {
+    position: absolute;
+    right: 8px;
+    top: 10px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Tick marks */
+  .tick {
+    position: absolute;
+    top: -5px;
+    width: 1px;
+    height: 12px;
+    background: var(--muted);
+    transform: translateX(-50%);
+  }
+
+  /* Task blocks */
+  .task {
+    position: absolute;
+    top: -44px;
+    height: 36px;
+    background: rgba(0, 229, 255, 0.12);
+    border: 1.5px solid var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    animation: fadeSlideIn 0.6s both;
+    overflow: hidden;
+  }
+
+  .task::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0,229,255,0.06), transparent);
+    animation: shimmer 2.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Long task (overruns period) */
+  .task.long {
+    background: rgba(255, 107, 107, 0.12);
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+  .task.long::after {
+    background: linear-gradient(90deg, transparent, rgba(255,107,107,0.06), transparent);
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Period brace */
+  .brace {
+    position: absolute;
+    bottom: -52px;
+    height: 28px;
+    border: 1.5px solid var(--accent3);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+  }
+
+  .brace-label {
+    position: absolute;
+    bottom: -72px;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent3);
+    white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  /* Delay brace */
+  .delay-brace {
+    position: absolute;
+    bottom: -52px;
+    height: 28px;
+    border: 1.5px solid #c084fc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+  }
+
+  .delay-label {
+    position: absolute;
+    bottom: -72px;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: #c084fc;
+    white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  /* Start dot */
+  .dot {
+    position: absolute;
+    top: -6px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    border: 2px solid var(--bg);
+  }
+
+  /* ── Key Point box ── */
+  .keypoint {
+    background: rgba(168, 255, 120, 0.05);
+    border: 1px solid rgba(168, 255, 120, 0.25);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin-top: 20px;
+  }
+
+  .keypoint-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .keypoint p {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: #a8ff78;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .keypoint strong { color: #fff; }
+
+  /* ── Info grid ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 500px) {
+    .info-grid { grid-template-columns: 1fr; }
+  }
+
+  .info-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .info-item-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 6px;
+  }
+
+  .info-item-value {
+    font-size: 0.88rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+  }
+
+  .info-item-value .hl { color: var(--accent); }
+  .info-item-value .hl2 { color: #c084fc; }
+  .info-item-value .hl3 { color: var(--accent3); }
+
+  /* ── Comparison ── */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  @media (max-width: 560px) {
+    .comparison { grid-template-columns: 1fr; }
+  }
+
+  .comp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 18px 14px;
+  }
+
+  .comp-title {
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .comp-title.rate { color: var(--accent); }
+  .comp-title.delay { color: #f9a825; }
+
+  .mini-timeline {
+    position: relative;
+    height: 60px;
+  }
+
+  .mini-axis {
+    position: absolute;
+    top: 28px;
+    left: 0; right: 0;
+    height: 1.5px;
+    background: var(--border);
+  }
+
+  .mini-task {
+    position: absolute;
+    top: 8px;
+    height: 18px;
+    border-radius: 3px;
+    font-size: 0;
+  }
+
+  .mini-gap {
+    position: absolute;
+    top: 8px;
+    height: 18px;
+    border-radius: 3px;
+    border: 1px dashed;
+    font-size: 0;
+    opacity: 0.5;
+  }
+
+  .comp-desc {
+    margin-top: 10px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="method-name"><span>executor.</span>scheduleAtFixedRate<span>()</span></div>
+    <div class="subtitle">ScheduledExecutorService — Fixed-Rate Execution Model</div>
+  </header>
+
+  <!-- Signature -->
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="info-item-label">Method Signature</div>
+      <div class="info-item-value" style="font-size:0.75rem; line-height:1.7">
+        scheduleAtFixedRate(<br>
+        &nbsp; <span class="hl">Runnable</span> command,<br>
+        &nbsp; <span class="hl2">long</span> initialDelay,<br>
+        &nbsp; <span class="hl3">long</span> period,<br>
+        &nbsp; <span class="hl2">TimeUnit</span> unit<br>
+        )
+      </div>
+    </div>
+    <div class="info-item">
+      <div class="info-item-label">Parameters</div>
+      <div class="info-item-value" style="font-size:0.78rem; line-height:2">
+        <span class="hl">command</span> — task to execute<br>
+        <span class="hl2">initialDelay</span> — delay before 1st run<br>
+        <span class="hl3">period</span> — start-to-start interval<br>
+        <span class="hl2">unit</span> — time unit for both
+      </div>
+    </div>
+  </div>
+
+  <!-- Main timeline card -->
+  <div class="card">
+    <div class="card-label">// Execution Timeline — Normal Case (task duration &lt; period)</div>
+
+    <div class="timeline-wrap">
+      <div class="axis" id="axis1">
+        <div class="axis-arrow"></div>
+        <div class="axis-label">time →</div>
+
+        <!-- Ticks at 0, 20%, 40%, 60%, 80%, 100% -->
+        <!-- Delay brace: 0→15% -->
+        <div class="delay-brace" style="left:0%; width:15%;"></div>
+        <div class="delay-label" style="left:7.5%;">initialDelay</div>
+
+        <!-- Task 1: 15%–28% -->
+        <div class="task" style="left:15%; width:13%; animation-delay:0.1s">T1</div>
+        <div class="dot" style="left:15%; background: #c084fc;"></div>
+
+        <!-- period brace 1: 15%→40% -->
+        <div class="brace" style="left:15%; width:25%;"></div>
+        <div class="brace-label" style="left:27.5%;">period</div>
+
+        <!-- Task 2: 40%–53% -->
+        <div class="task" style="left:40%; width:13%; animation-delay:0.3s">T2</div>
+        <div class="dot" style="left:40%; background: var(--accent);"></div>
+
+        <!-- period brace 2: 40%→65% -->
+        <div class="brace" style="left:40%; width:25%;"></div>
+        <div class="brace-label" style="left:52.5%;">period</div>
+
+        <!-- Task 3: 65%–78% -->
+        <div class="task" style="left:65%; width:13%; animation-delay:0.5s">T3</div>
+        <div class="dot" style="left:65%; background: var(--accent);"></div>
+
+        <!-- period brace 3: 65%→90% (partial) -->
+        <div class="brace" style="left:65%; width:25%;"></div>
+        <div class="brace-label" style="left:77.5%;">period</div>
+      </div>
+    </div>
+
+    <div class="keypoint">
+      <div class="keypoint-icon">⚡</div>
+      <p><strong>Key Rule:</strong> The next execution starts exactly <strong>period</strong> time after the <strong>previous start</strong>, regardless of how long the task took. If the task finishes early, the executor waits. The clock ticks from <em>start-to-start</em>.</p>
+    </div>
+  </div>
+
+  <!-- Long task / overlap scenario -->
+  <div class="card">
+    <div class="card-label">// Edge Case — Task duration &gt; period (execution queued, not overlapped)</div>
+
+    <div class="timeline-wrap">
+      <div class="axis" id="axis2">
+        <div class="axis-arrow"></div>
+        <div class="axis-label">time →</div>
+
+        <!-- Delay -->
+        <div class="delay-brace" style="left:0%; width:10%;"></div>
+        <div class="delay-label" style="left:5%;">initialDelay</div>
+
+        <!-- T1 long: 10%–60% -->
+        <div class="task long" style="left:10%; width:50%; animation-delay:0.1s">T1 &nbsp;(overruns period)</div>
+        <div class="dot" style="left:10%; background: #c084fc;"></div>
+
+        <!-- Period brace: 10%→35% -->
+        <div class="brace" style="left:10%; width:25%; border-color: rgba(168,255,120,0.4);"></div>
+        <div class="brace-label" style="left:22.5%; color: rgba(168,255,120,0.6);">period</div>
+
+        <!-- T2 starts at 60% (right after T1 finishes) -->
+        <div class="task" style="left:60%; width:18%; animation-delay:0.4s">T2</div>
+        <div class="dot" style="left:60%; background: var(--accent);"></div>
+
+        <!-- T3 starts at 78% -->
+        <div class="task" style="left:78%; width:18%; animation-delay:0.6s">T3</div>
+        <div class="dot" style="left:78%; background: var(--accent);"></div>
+
+      </div>
+    </div>
+
+    <div class="keypoint" style="background: rgba(255,107,107,0.05); border-color: rgba(255,107,107,0.25);">
+      <div class="keypoint-icon">⚠️</div>
+      <p style="color: #ff9e9e;"><strong>Overrun Behavior:</strong> If a task takes longer than the period, the <strong>next execution starts immediately</strong> after the previous finishes — but <strong>only one at a time</strong> (no concurrent overlaps). Subsequent tasks catch up as fast as possible, one by one.</p>
+    </div>
+  </div>
+
+  <!-- Comparison row -->
+  <div class="comparison">
+    <div class="comp-card">
+      <div class="comp-title rate">scheduleAtFixedRate</div>
+      <div class="mini-timeline">
+        <div class="mini-axis"></div>
+        <!-- Tasks at fixed starts -->
+        <div class="mini-task" style="left:5%;width:8%;background:rgba(0,229,255,0.3);border:1px solid var(--accent);"></div>
+        <div class="mini-task" style="left:28%;width:8%;background:rgba(0,229,255,0.3);border:1px solid var(--accent);"></div>
+        <div class="mini-task" style="left:51%;width:8%;background:rgba(0,229,255,0.3);border:1px solid var(--accent);"></div>
+        <div class="mini-task" style="left:74%;width:8%;background:rgba(0,229,255,0.3);border:1px solid var(--accent);"></div>
+        <!-- period arrows -->
+        <div style="position:absolute;top:32px;left:5%;width:23%;height:1px;background:#444;"></div>
+        <div style="position:absolute;top:29px;left:28%;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid #444;"></div>
+        <div style="position:absolute;top:38px;left:9%;font-size:0.6rem;color:var(--accent3);font-family:JetBrains Mono,monospace;">period (start→start)</div>
+      </div>
+      <div class="comp-desc">Next start = prev start + period</div>
+    </div>
+
+    <div class="comp-card">
+      <div class="comp-title delay">scheduleWithFixedDelay</div>
+      <div class="mini-timeline">
+        <div class="mini-axis"></div>
+        <!-- Tasks with gap between end and next start -->
+        <div class="mini-task" style="left:5%;width:14%;background:rgba(249,168,37,0.2);border:1px solid #f9a825;"></div>
+        <div class="mini-task" style="left:35%;width:14%;background:rgba(249,168,37,0.2);border:1px solid #f9a825;"></div>
+        <div class="mini-task" style="left:65%;width:14%;background:rgba(249,168,37,0.2);border:1px solid #f9a825;"></div>
+        <!-- delay gap -->
+        <div style="position:absolute;top:32px;left:19%;width:16%;height:1px;background:#444;"></div>
+        <div style="position:absolute;top:29px;left:35%;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid #444;"></div>
+        <div style="position:absolute;top:38px;left:19%;font-size:0.6rem;color:#f9a825;font-family:JetBrains Mono,monospace;">delay (end→start)</div>
+      </div>
+      <div class="comp-desc">Next start = prev end + delay</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
